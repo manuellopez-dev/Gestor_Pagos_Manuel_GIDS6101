@@ -77,6 +77,8 @@ public class ConfigDB {
             properties.put("hibernate.show-sql", false);
             properties.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect");
             properties.put("jakarta.persistence.query.timeout", 600000);
+            properties.put("hibernate.default_schema",
+                    env.getProperty("spring.jpa.properties.hibernate.default_schema", "app"));
 
 
         } catch (Exception e) {
