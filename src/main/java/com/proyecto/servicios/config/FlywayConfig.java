@@ -22,6 +22,9 @@ public class FlywayConfig {
     @Value("${spring.flyway.schemas:public}")
     private String schema;
 
+    @Value("${spring.flyway.enabled:true}")
+    private boolean enabled;
+
     @Bean(name = "flyway")
     public Flyway flyway(@Qualifier("sfDatasource") DataSource dataSource) {
         log.info("Iniciando migraciones Flyway en schema '{}'", schema);
@@ -33,7 +36,11 @@ public class FlywayConfig {
                 .baselineOnMigrate(true)
                 .baselineVersion("0")
                 .load();
-        flyway.migrate();
+        if (enabled) {
+            flyway.migrate();
+        } else {
+            log.warn("Flyway deshabilitado (spring.flyway.enabled=false), no se ejecutan migraciones");
+        }
         return flyway;
     }
 }
