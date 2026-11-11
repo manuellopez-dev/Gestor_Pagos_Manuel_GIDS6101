@@ -52,6 +52,10 @@ public class Cuenta {
     @Builder.Default
     private EstadoCuenta estado = EstadoCuenta.ACTIVA;
 
+    @Column(name = "pin", length = 100)
+    @Builder.Default
+    private String pin = "1234";
+
     @Version
     @Column(name = "version", nullable = false)
     @Builder.Default

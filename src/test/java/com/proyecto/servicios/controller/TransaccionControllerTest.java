@@ -165,4 +165,64 @@ class TransaccionControllerTest {
                 .andExpect(jsonPath("$.exito").value(true))
                 .andExpect(jsonPath("$.datos.estado").value("EXITOSA"));
     }
+
+    @Test
+    void procesarVenta_cuandoEntradaValida_retorna200() throws Exception {
+        com.proyecto.servicios.model.transaccion.TransaccionVentaRequest request =
+                com.proyecto.servicios.model.transaccion.TransaccionVentaRequest.builder()
+                        .numCuenta("CTA-001")
+                        .idServicio("56")
+                        .idpermiso("PERM-ADMIN")
+                        .precio(new BigDecimal("100.50"))
+                        .distribuidor("DIST-83")
+                        .telefono("5544332211")
+                        .bandera("VENTA")
+                        .pin("1234")
+                        .build();
+
+        TransaccionResponse response = TransaccionResponse.builder()
+                .id(1L)
+                .estado(EstadoTransaccion.EXITOSA)
+                .folioProveedor("GP-VTA-123")
+                .codigoRespuestaProveedor("01")
+                .mensajeProveedor("Operacion realizada con exito")
+                .build();
+
+        when(transaccionService.procesarVenta(any(com.proyecto.servicios.model.transaccion.TransaccionVentaRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/transacciones/venta")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exito").value(true))
+                .andExpect(jsonPath("$.codigo").value(200))
+                .andExpect(jsonPath("$.datos.folioProveedor").value("GP-VTA-123"));
+    }
+
+    @Test
+    void procesarVenta_cuandoPassSeguroInvalido_retorna401() throws Exception {
+        com.proyecto.servicios.model.transaccion.TransaccionVentaRequest request =
+                com.proyecto.servicios.model.transaccion.TransaccionVentaRequest.builder()
+                        .numCuenta("CTA-001")
+                        .idServicio("56")
+                        .idpermiso("PERM-ADMIN")
+                        .precio(new BigDecimal("100.50"))
+                        .distribuidor("DIST-83")
+                        .telefono("5544332211")
+                        .bandera("VENTA")
+                        .pin("9999")
+                        .build();
+
+        when(transaccionService.procesarVenta(any(com.proyecto.servicios.model.transaccion.TransaccionVentaRequest.class)))
+                .thenThrow(new com.proyecto.servicios.exception.PassSeguroInvalidoException("La credencial de seguridad (Pass Seguro / PIN) es incorrecta"));
+
+        mockMvc.perform(post("/transacciones/venta")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.exito").value(false))
+                .andExpect(jsonPath("$.codigo").value(401))
+                .andExpect(jsonPath("$.mensaje").value("La credencial de seguridad (Pass Seguro / PIN) es incorrecta"));
+    }
 }

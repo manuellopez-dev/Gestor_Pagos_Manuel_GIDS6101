@@ -31,6 +31,12 @@ public class TransaccionResponse {
     private String autorizacionProveedor;
     private String codigoRespuestaProveedor;
     private String mensajeProveedor;
+    private String distribuidor;
+    private String idPermiso;
+    private String bandera;
+    private String upe;
+    private String unidad;
+    private String firmaDigital;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime fechaCreacion;

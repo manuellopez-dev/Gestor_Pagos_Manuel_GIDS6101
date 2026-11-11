@@ -4,6 +4,7 @@ import com.proyecto.servicios.model.common.ApiResponse;
 import com.proyecto.servicios.model.transaccion.ConciliacionRequest;
 import com.proyecto.servicios.model.transaccion.TransaccionRequest;
 import com.proyecto.servicios.model.transaccion.TransaccionResponse;
+import com.proyecto.servicios.model.transaccion.TransaccionVentaRequest;
 import com.proyecto.servicios.service.TransaccionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,16 @@ public class TransaccionController {
         TransaccionResponse response = transaccionService.procesarTransaccion(request);
         return new ResponseEntity<>(
                 ApiResponse.exitoso(HttpStatus.OK.value(), "Transacción procesada exitosamente", response),
+                HttpStatus.OK
+        );
+    }
+
+    @PostMapping(value = "/venta", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<TransaccionResponse>> procesarVenta(
+            @Valid @RequestBody com.proyecto.servicios.model.transaccion.TransaccionVentaRequest request) {
+        TransaccionResponse response = transaccionService.procesarVenta(request);
+        return new ResponseEntity<>(
+                ApiResponse.exitoso(HttpStatus.OK.value(), "Venta procesada exitosamente (Código 01 / Saldo descontado)", response),
                 HttpStatus.OK
         );
     }

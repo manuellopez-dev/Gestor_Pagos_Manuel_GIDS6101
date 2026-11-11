@@ -5,6 +5,7 @@ import com.proyecto.servicios.exception.CuentaInactivaException;
 import com.proyecto.servicios.exception.CuentaNoEncontradaException;
 import com.proyecto.servicios.exception.IntegracionException;
 import com.proyecto.servicios.exception.MontoInvalidoException;
+import com.proyecto.servicios.exception.PassSeguroInvalidoException;
 import com.proyecto.servicios.exception.ProductoNoEncontradoException;
 import com.proyecto.servicios.exception.ReglaNegocioException;
 import com.proyecto.servicios.exception.SaldoInsuficienteException;
@@ -87,6 +88,16 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(PassSeguroInvalidoException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePassSeguroInvalido(PassSeguroInvalidoException ex) {
+        log.warn("Falla de autenticación en Pass Seguro / PIN: {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.fallo(
+                HttpStatus.UNAUTHORIZED.value(),
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(CuentaNoEncontradaException.class)
