@@ -6,6 +6,7 @@ import com.proyecto.servicios.entity.transaccion.EstadoTransaccion;
 import com.proyecto.servicios.entity.transaccion.Transaccion;
 import com.proyecto.servicios.exception.CuentaInactivaException;
 import com.proyecto.servicios.exception.CuentaNoEncontradaException;
+import com.proyecto.servicios.exception.PassSeguroInvalidoException;
 import com.proyecto.servicios.exception.SaldoInsuficienteException;
 import com.proyecto.servicios.model.xml.MensajeXml;
 import com.proyecto.servicios.model.xml.RespuestaTransaccionXml;
@@ -40,22 +41,54 @@ public class TransaccionOperacionServiceImpl implements TransaccionOperacionServ
                                                      String referencia, String digitoVerificador) {
         log.info("Iniciando reserva de saldo para cuentaId={}, monto={}", cuentaId, monto);
 
-        // Bloqueo pesimista para evitar carreras o doble gasto concurrente
         Cuenta cuenta = cuentaRepository.findByIdConBloqueo(cuentaId)
                 .orElseThrow(() -> new CuentaNoEncontradaException(cuentaId));
 
+        return ejecutarReserva(cuenta, idempotenciaKey, idServicio, idProducto, nombreProducto,
+                monto, referencia, digitoVerificador, null, null, null, null, "1", null, null);
+    }
+
+    @Override
+    @Transactional("sfTransactionManager")
+    public Transaccion reservarSaldoVenta(String idempotenciaKey, String numCuenta, String pin,
+                                          String idServicio, String idProducto, String nombreProducto,
+                                          BigDecimal monto, String referencia, String distribuidor,
+                                          String idPermiso, String bandera, String upe,
+                                          String unidad, String firmaDigital, String payloadCifrado) {
+        log.info("Iniciando validación y reserva para venta. NumCuenta={}, Monto={}", numCuenta, monto);
+
+        // Bloqueo pesimista sobre la cuenta
+        Cuenta cuenta = cuentaRepository.findByNumeroCuentaConBloqueo(numCuenta.trim())
+                .orElseThrow(() -> new CuentaNoEncontradaException("No se encontró la cuenta " + numCuenta));
+
+        // 1. Validación de Pass Seguro (PIN de seguridad)
+        if (cuenta.getPin() != null && !cuenta.getPin().equals(pin.trim())) {
+            log.warn("Credencial de seguridad inválida para la cuenta {}", numCuenta);
+            throw new PassSeguroInvalidoException("La credencial de seguridad (Pass Seguro / PIN) es incorrecta");
+        }
+
+        return ejecutarReserva(cuenta, idempotenciaKey, idServicio, idProducto, nombreProducto,
+                monto, referencia, null, distribuidor, idPermiso, bandera, upe, unidad, firmaDigital, payloadCifrado);
+    }
+
+    private Transaccion ejecutarReserva(Cuenta cuenta, String idempotenciaKey, String idServicio,
+                                        String idProducto, String nombreProducto, BigDecimal monto,
+                                        String referencia, String digitoVerificador, String distribuidor,
+                                        String idPermiso, String bandera, String upe,
+                                        String unidad, String firmaDigital, String payloadCifrado) {
+        // 2. Validación de Cuenta Activa -> Saldo
         if (cuenta.getEstado() != EstadoCuenta.ACTIVA) {
-            log.warn("Intento de operación sobre cuenta inactiva o bloqueada. CuentaId={}, Estado={}", cuentaId, cuenta.getEstado());
+            log.warn("Operación rechazada: cuenta inactiva o bloqueada. Cuenta={}, Estado={}", cuenta.getNumeroCuenta(), cuenta.getEstado());
             throw new CuentaInactivaException("La cuenta " + cuenta.getNumeroCuenta() + " no está activa (Estado: " + cuenta.getEstado() + ")");
         }
 
         BigDecimal disponible = cuenta.getSaldoDisponible();
         if (disponible.compareTo(monto) < 0) {
-            log.warn("Saldo insuficiente para cuentaId={}. Disponible={}, Requerido={}", cuentaId, disponible, monto);
+            log.warn("Saldo insuficiente en cuenta {}. Disponible={}, Requerido={}", cuenta.getNumeroCuenta(), disponible, monto);
             throw new SaldoInsuficienteException("Saldo disponible insuficiente: $" + disponible + ", monto requerido: $" + monto);
         }
 
-        // Se aisla el saldo en saldoRetenido
+        // Se bloquea el saldo moviéndolo a saldoRetenido
         cuenta.setSaldoRetenido(cuenta.getSaldoRetenido().add(monto));
         cuenta.setFechaActualizacion(LocalDateTime.now());
         cuentaRepository.save(cuenta);
@@ -69,13 +102,20 @@ public class TransaccionOperacionServiceImpl implements TransaccionOperacionServ
                 .monto(monto)
                 .referencia(referencia)
                 .digitoVerificador(digitoVerificador)
+                .distribuidor(distribuidor)
+                .idPermiso(idPermiso)
+                .bandera(bandera)
+                .upe(upe)
+                .unidad(unidad)
+                .firmaDigital(firmaDigital)
+                .payloadCifrado(payloadCifrado)
                 .estado(EstadoTransaccion.EN_PROCESO)
                 .fechaCreacion(LocalDateTime.now())
                 .fechaActualizacion(LocalDateTime.now())
                 .build();
 
         Transaccion guardada = transaccionRepository.save(tx);
-        log.info("Saldo reservado exitosamente. TransaccionId={}, IdempotenciaKey={}", guardada.getId(), idempotenciaKey);
+        log.info("Reserva exitosa para txId={}, IdempotenciaKey={}", guardada.getId(), idempotenciaKey);
         return guardada;
     }
 
@@ -89,7 +129,7 @@ public class TransaccionOperacionServiceImpl implements TransaccionOperacionServ
         Cuenta cuenta = cuentaRepository.findByIdConBloqueo(tx.getCuenta().getId())
                 .orElseThrow(() -> new CuentaNoEncontradaException(tx.getCuenta().getId()));
 
-        // Descuento definitivo del saldo y liberación de la retención
+        // Código 01: descontar Saldo definitivo y liberar retención
         cuenta.setSaldo(cuenta.getSaldo().subtract(tx.getMonto()));
         cuenta.setSaldoRetenido(cuenta.getSaldoRetenido().subtract(tx.getMonto()));
         cuenta.setFechaActualizacion(LocalDateTime.now());
@@ -110,7 +150,7 @@ public class TransaccionOperacionServiceImpl implements TransaccionOperacionServ
         }
         tx.setFechaActualizacion(LocalDateTime.now());
         Transaccion liquidada = transaccionRepository.save(tx);
-        log.info("Transacción txId={} liquidada exitosamente. Folio={}", transaccionId, tx.getFolioProveedor());
+        log.info("Saldo descontado y transacción txId={} liquidada exitosamente. Folio={}", transaccionId, tx.getFolioProveedor());
         return liquidada;
     }
 
@@ -124,7 +164,7 @@ public class TransaccionOperacionServiceImpl implements TransaccionOperacionServ
         Cuenta cuenta = cuentaRepository.findByIdConBloqueo(tx.getCuenta().getId())
                 .orElseThrow(() -> new CuentaNoEncontradaException(tx.getCuenta().getId()));
 
-        // Se libera la retención devolviendo el disponible a la cuenta
+        // Se libera la retención, devolviendo el saldo al disponible
         cuenta.setSaldoRetenido(cuenta.getSaldoRetenido().subtract(tx.getMonto()));
         cuenta.setFechaActualizacion(LocalDateTime.now());
         cuentaRepository.save(cuenta);
@@ -134,7 +174,7 @@ public class TransaccionOperacionServiceImpl implements TransaccionOperacionServ
         tx.setMensajeProveedor(mensajeError);
         tx.setFechaActualizacion(LocalDateTime.now());
         Transaccion revertida = transaccionRepository.save(tx);
-        log.info("Transacción txId={} revertida. NuevoEstado={}", transaccionId, tx.getEstado());
+        log.info("Transacción txId={} revertida. Saldo preservado intacto.", transaccionId);
         return revertida;
     }
 

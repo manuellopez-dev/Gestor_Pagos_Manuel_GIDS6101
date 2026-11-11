@@ -61,6 +61,27 @@ public class Transaccion {
     @Column(name = "digito_verificador", length = 10)
     private String digitoVerificador;
 
+    @Column(name = "distribuidor", length = 50)
+    private String distribuidor;
+
+    @Column(name = "id_permiso", length = 50)
+    private String idPermiso;
+
+    @Column(name = "bandera", length = 20)
+    private String bandera;
+
+    @Column(name = "upe", length = 50)
+    private String upe;
+
+    @Column(name = "unidad", length = 20)
+    private String unidad;
+
+    @Column(name = "firma_digital", columnDefinition = "TEXT")
+    private String firmaDigital;
+
+    @Column(name = "payload_cifrado", columnDefinition = "TEXT")
+    private String payloadCifrado;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estado", nullable = false, length = 30)
     private EstadoTransaccion estado;

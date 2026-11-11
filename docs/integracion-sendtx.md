@@ -65,7 +65,31 @@ Documento de arquitectura, análisis de riesgos y decisiones de diseño para la 
 
 ## 3. Endpoints Implementados
 
-### 3.1. Procesar Transacción Financiera
+### 3.1. Flujo de Venta Completo (Arquitectura de 4 Bloques: Validación Inicial, Payload, AES/Firma y Código 01)
+- **Método / URL:** `POST /transacciones/venta`
+- **Request Body (`TransaccionVentaRequest`):**
+```json
+{
+  "numCuenta": "CTA-001",
+  "idServicio": "56",
+  "idpermiso": "PERM-ADMIN",
+  "precio": 100.50,
+  "distribuidor": "DIST-83",
+  "telefono": "5544332211",
+  "bandera": "VENTA_DIRECTA",
+  "pin": "1234",
+  "idProducto": "185",
+  "upe": "UPE-56",
+  "unidad": "1"
+}
+```
+- **Flujo Interno Ejecutado:**
+  1. **Validación Inicial:** Verifica `Pass Seguro` (PIN de la cuenta) y `Cuenta Activa -> Saldo`.
+  2. **Bloque Central (Payload):** Construye la carga canónica (`idCuenta`, `idServicio`, `telefonoReferencia`, `horaLocal`, `montoPago`, `upe`, `unidad`).
+  3. **Cifrado y Autenticación:** Genera la firma digital **HMAC-SHA256**, cifra el payload con **AES-256**, recupera el Token activo y registra la transacción en BD.
+  4. **Post Send Tx & Respuesta:** Envía la petición a GestoPago. Al recibir **Código 01**, descuenta definitivamente el saldo de la cuenta de origen (`descontar Saldo`).
+
+### 3.2. Procesar Transacción Financiera
 - **Método / URL:** `POST /transacciones`
 - **Request Body (`TransaccionRequest`):**
 ```json
